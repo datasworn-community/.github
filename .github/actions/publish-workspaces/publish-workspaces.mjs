@@ -1,6 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import {
+  assertNoUnresolvedWorkspaceDependencies,
+  resolveWorkspaceDependencies
+} from './workspace-manifest.mjs'
 
 const root = process.cwd()
 const mode = process.env.INPUT_MODE
@@ -56,6 +60,37 @@ if (mode === 'canary') {
 
   for (const workspacePackage of orderedPackages) {
     rewriteCanaryManifest(workspacePackage, canaryVersions)
+  }
+}
+
+if (mode === 'release') {
+  // Resolve internal `workspace:` dependencies to the locked versions before
+  // publishing. npm publishes `workspace:` specs verbatim (it does not
+  // understand the protocol), so without this an internal dependency ships
+  // unresolvable. Canary mode already rewrites via rewriteCanaryManifest.
+  const releaseVersions = new Map(
+    orderedPackages.map((workspacePackage) => [
+      workspacePackage.manifest.name,
+      workspacePackage.manifest.version
+    ])
+  )
+
+  for (const workspacePackage of orderedPackages) {
+    const resolved = resolveWorkspaceDependencies(
+      workspacePackage.manifest,
+      releaseVersions
+    )
+    workspacePackage.manifest = resolved
+    writeJson(workspacePackage.manifestPath, resolved)
+  }
+}
+
+if (mode === 'release' || mode === 'canary') {
+  // Validate every manifest before publishing any of them, so a detectable
+  // problem fails loud without leaving a partial publish behind. npm ships
+  // `workspace:` specs verbatim and they are unresolvable from the registry.
+  for (const workspacePackage of orderedPackages) {
+    assertNoUnresolvedWorkspaceDependencies(workspacePackage.manifest)
   }
 }
 
