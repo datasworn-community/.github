@@ -109,46 +109,13 @@ jobs:
       - name: Publish canary packages
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
         id: publish
+        uses: datasworn-community/.github/.github/actions/publish-workspaces@v1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          short_sha="${HEAD_SHA::12}"
-          dist_tag="pr-${PR_NUMBER}"
-          install_lines=""
-
-          while IFS= read -r manifest; do
-            if node -e "const pkg=require(process.argv[1]); process.exit(pkg.private ? 0 : 1)" "$manifest"; then
-              continue
-            fi
-
-            package_dir="$(dirname "$manifest")"
-            package_name="$(node -p "require(process.argv[1]).name" "$manifest")"
-            current_version="$(node -p "require(process.argv[1]).version" "$manifest")"
-            canary_version="${current_version}-experimental.${PR_NUMBER}.${short_sha}"
-
-            echo "Publishing ${package_name}@${canary_version} from ${package_dir}"
-            npm --prefix "$package_dir" version "$canary_version" --no-git-tag-version
-            npm publish "$package_dir" --access public --provenance --tag "$dist_tag"
-
-            install_lines="${install_lines}"$'\n'"npm i ${package_name}@${canary_version}"
-            install_lines="${install_lines}"$'\n'"npm i ${package_name}@${dist_tag}"
-          done < <(
-            find . \
-              -path './node_modules' -prune -o \
-              -path './.git' -prune -o \
-              -name package.json -print
-          )
-
-          {
-            echo 'install_lines<<EOF'
-            printf '%s\n' "$install_lines"
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+        with:
+          mode: canary
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
 
       - name: Update PR comment
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
@@ -202,26 +169,9 @@ jobs:
           npm --version
 
       - name: Remove PR dist-tags
+        uses: datasworn-community/.github/.github/actions/publish-workspaces@v1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          dist_tag="pr-${PR_NUMBER}"
-
-          while IFS= read -r manifest; do
-            if node -e "const pkg=require(process.argv[1]); process.exit(pkg.private ? 0 : 1)" "$manifest"; then
-              continue
-            fi
-
-            package_name="$(node -p "require(process.argv[1]).name" "$manifest")"
-            echo "Removing ${package_name}@${dist_tag}"
-            npm dist-tag rm "$package_name" "$dist_tag" || true
-          done < <(
-            find . \
-              -path './node_modules' -prune -o \
-              -path './.git' -prune -o \
-              -name package.json -print
-          )
+        with:
+          mode: cleanup
+          pr-number: ${{ github.event.pull_request.number }}

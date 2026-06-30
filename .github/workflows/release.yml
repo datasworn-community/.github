@@ -37,24 +37,8 @@ jobs:
           npm --version
 
       - name: Publish packages
+        uses: datasworn-community/.github/.github/actions/publish-workspaces@v1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          while IFS= read -r manifest; do
-            if node -e "const pkg=require(process.argv[1]); process.exit(pkg.private ? 0 : 1)" "$manifest"; then
-              continue
-            fi
-
-            package_dir="$(dirname "$manifest")"
-            package_name="$(node -p "require(process.argv[1]).name" "$manifest")"
-            echo "Publishing ${package_name} from ${package_dir}"
-            npm publish "$package_dir" --access public --provenance
-          done < <(
-            find . \
-              -path './node_modules' -prune -o \
-              -path './.git' -prune -o \
-              -name package.json -print
-          )
+        with:
+          mode: release

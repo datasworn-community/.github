@@ -26,6 +26,18 @@ release or canary publication will work.
 If Trusted Publishing is not available for a package, add an organization-level
 `NPM_TOKEN` secret and inherit it from the caller workflow.
 
+Release workflows publish non-private packages declared in the root
+`workspaces` field, in internal dependency order. Repositories with one package
+can omit `workspaces`; the root package will be used. Repositories with multiple
+packages must declare every publishable package as a workspace and must not
+include helper manifests such as `dist/esm/package.json` in those workspace
+patterns. Mark packages that should never publish with `"private": true`.
+
+For experimental releases, internal workspace dependency ranges are rewritten to
+that PR's exact canary versions before publish. For example, if
+`@datasworn-community/build-tools` depends on `@datasworn-community/core`, the
+canary build-tools package will depend on that same PR's core canary.
+
 Experimental release callers should include PR open/update events so the shared
 workflow can post instructions before a canary is requested:
 
