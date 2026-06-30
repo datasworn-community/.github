@@ -1,0 +1,31 @@
+name: Bun build
+description: Set up Bun, install dependencies, build, and optionally validate.
+
+inputs:
+  bun-version-file:
+    description: Path to the Bun version file in the caller repository.
+    default: .tool-versions
+  validate:
+    description: Run `bun run validate` after the build.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: ${{ inputs.bun-version-file }}
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
+
+    - name: Build
+      shell: bash
+      run: bun run build
+
+    - name: Validate
+      if: inputs.validate == 'true'
+      shell: bash
+      run: bun run validate
