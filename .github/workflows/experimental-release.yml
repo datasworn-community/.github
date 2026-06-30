@@ -12,6 +12,40 @@ permissions:
   id-token: write
 
 jobs:
+  instructions:
+    name: Post canary instructions
+    if: >
+      github.event.action == 'opened' ||
+      github.event.action == 'reopened' ||
+      github.event.action == 'ready_for_review'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Update PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          marker='<!-- datasworn-community experimental release -->'
+          body="$(cat <<EOF
+          ${marker}
+          Need an experimental publish for this PR? Add the \`release_experimental\` label.
+
+          While the label is present, every push publishes fresh canaries with the \`pr-${{ github.event.pull_request.number }}\` npm dist-tag. Remove the label to stop publishing canaries.
+          EOF
+          )"
+
+          comment_id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq ".[] | select(.body | startswith(\"${marker}\")) | .id" | head -n 1)"
+
+          if [[ -n "${comment_id}" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="${body}"
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments" -f body="${body}"
+          fi
+
   canary:
     name: Publish canary packages
     if: >

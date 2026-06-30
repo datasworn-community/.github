@@ -25,3 +25,17 @@ release or canary publication will work.
 
 If Trusted Publishing is not available for a package, add an organization-level
 `NPM_TOKEN` secret and inherit it from the caller workflow.
+
+Experimental release callers should include PR open/update events so the shared
+workflow can post instructions before a canary is requested:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, labeled, synchronize, closed]
+
+jobs:
+  experimental-release:
+    uses: datasworn-community/.github/.github/workflows/experimental-release.yml@v1
+    secrets: inherit
+```
