@@ -33,10 +33,27 @@ packages must declare every publishable package as a workspace and must not
 include helper manifests such as `dist/esm/package.json` in those workspace
 patterns. Mark packages that should never publish with `"private": true`.
 
-For experimental releases, internal workspace dependency ranges are rewritten to
-that PR's exact canary versions before publish. For example, if
-`@datasworn-community/build-tools` depends on `@datasworn-community/core`, the
-canary build-tools package will depend on that same PR's core canary.
+Internal workspace dependencies are rewritten to concrete versions before
+publish, because npm publishes the `workspace:` protocol verbatim and such specs
+are unresolvable from the registry:
+
+- **Release:** each internal `workspace:` dependency is resolved to the
+  depended-on package's locked version, honouring the range modifier
+  (`workspace:*`/`workspace:` → `<version>`, `workspace:^` → `^<version>`,
+  `workspace:~` → `~<version>`, explicit ranges kept as-is). For example, if
+  `@datasworn-community/build-tools` declares `@datasworn-community/core` as a
+  `workspace:*` dependency, the published build-tools depends on core's exact
+  released version.
+- **Experimental (canary):** internal dependency ranges are rewritten to that
+  PR's exact canary versions, so the canary build-tools depends on that same
+  PR's core canary.
+
+Before publishing anything, the release/canary run validates every manifest and
+**fails loud** if a consumer-facing field (`dependencies`, `peerDependencies`,
+`optionalDependencies`) still carries a `workspace:` spec — for instance, a
+dependency on a `private` workspace package that is never published. Resolve it
+to a published package or a concrete range. (`devDependencies` are exempt: an
+installer never resolves a dependency's devDependencies.)
 
 Experimental release callers should include PR open/update events so the shared
 workflow can post instructions before a canary is requested:
