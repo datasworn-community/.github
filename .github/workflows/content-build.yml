@@ -1,0 +1,33 @@
+name: Content Build
+
+on:
+  workflow_call:
+    inputs:
+      package-dir:
+        description: Directory where the caller build writes publishable packages.
+        type: string
+        default: dist/packages
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and validate content
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        uses: datasworn-community/.github/.github/actions/bun-build@v1
+        with:
+          validate: "true"
+
+      - name: Upload generated packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-packages
+          path: ${{ inputs.package-dir }}
+          if-no-files-found: error

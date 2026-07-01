@@ -55,6 +55,28 @@ dependency on a `private` workspace package that is never published. Resolve it
 to a published package or a concrete range. (`devDependencies` are exempt: an
 installer never resolves a dependency's devDependencies.)
 
+Content repositories that generate publishable Datasworn package directories
+should use the content workflows instead of the workspace release workflow:
+
+```yaml
+jobs:
+  release:
+    uses: datasworn-community/.github/.github/workflows/content-release.yml@v1
+    secrets: inherit
+```
+
+The content release workflow reads generated package directories from
+`dist/packages` by default. It compares each generated artifact with the latest
+published package on the same schema line, publishes only changed packages, and
+calculates the next patch version independently per package. Dependency ranges
+between generated content packages stay on schema-line ranges such as `^0.2.0`,
+so patch releases of a dependency do not force dependent package releases.
+
+For experimental releases, internal workspace dependency ranges are rewritten to
+that PR's exact canary versions before publish. For example, if
+`@datasworn-community/build-tools` depends on `@datasworn-community/core`, the
+canary build-tools package will depend on that same PR's core canary.
+
 Experimental release callers should include PR open/update events so the shared
 workflow can post instructions before a canary is requested:
 

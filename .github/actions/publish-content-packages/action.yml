@@ -1,0 +1,41 @@
+name: Publish content packages
+description: Publish generated Datasworn content packages with per-package version calculation.
+
+inputs:
+  mode:
+    description: One of `release`, `canary`, or `cleanup`.
+    required: true
+  package-dir:
+    description: Directory containing generated publishable package directories.
+    default: dist/packages
+  pr-number:
+    description: Pull request number for canary dist-tags.
+    required: false
+  head-sha:
+    description: Pull request head SHA for canary versions.
+    required: false
+  dry-run:
+    description: Calculate and log publish actions without publishing.
+    default: "false"
+
+outputs:
+  summary:
+    description: Markdown summary of published/skipped packages.
+    value: ${{ steps.publish.outputs.summary }}
+  install_lines:
+    description: Install commands for canary packages.
+    value: ${{ steps.publish.outputs.install_lines }}
+
+runs:
+  using: composite
+  steps:
+    - name: Publish content packages
+      id: publish
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_PACKAGE_DIR: ${{ inputs.package-dir }}
+        INPUT_PR_NUMBER: ${{ inputs.pr-number }}
+        INPUT_HEAD_SHA: ${{ inputs.head-sha }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+      run: node "$GITHUB_ACTION_PATH/publish-content-packages.mjs"
