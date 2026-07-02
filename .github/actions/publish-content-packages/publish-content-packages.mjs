@@ -2,6 +2,11 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import {
+  latestStableVersionOnLine,
+  nextPatchVersion,
+  schemaLineFor
+} from './content-package-versions.mjs'
 
 const root = process.cwd()
 const mode = process.env.INPUT_MODE
@@ -66,10 +71,7 @@ for (const contentPackage of generatedPackages) {
     continue
   }
 
-  const nextVersion =
-    latestVersion == null
-      ? `${schemaLine}.0`
-      : `${schemaLine}.${semver(latestVersion).patch + 1}`
+  const nextVersion = nextPatchVersion(schemaLine, latestVersion)
   rewriteManifest(contentPackage, { version: nextVersion })
 
   const line = `- published ${contentPackage.manifest.name}@${nextVersion}`
@@ -124,6 +126,7 @@ function publishCanaries(packages) {
         '--tag',
         distTag
       ])
+      ensureCanaryIsNotLatest(contentPackage.manifest.name, canaryVersion)
     }
   }
 }
@@ -158,13 +161,41 @@ function latestPublishedVersionOnLine(packageName, schemaLine) {
 
   if (result.status !== 0) return undefined
 
-  const parsed = JSON.parse(result.stdout || '[]')
-  const versions = (Array.isArray(parsed) ? parsed : [parsed])
-    .filter((version) => typeof version === 'string')
-    .filter((version) => version.startsWith(`${schemaLine}.`))
-    .sort(compareSemver)
+  const versions = JSON.parse(result.stdout || '[]')
 
-  return versions.at(-1)
+  return latestStableVersionOnLine(
+    Array.isArray(versions) ? versions : [versions],
+    schemaLine
+  )
+}
+
+function ensureCanaryIsNotLatest(packageName, canaryVersion) {
+  const tags = packageDistTags(packageName)
+  if (tags.latest !== canaryVersion) return
+
+  const latestStable = latestPublishedVersionOnLine(
+    packageName,
+    schemaLineFor(canaryVersion)
+  )
+
+  if (latestStable != null) {
+    run('npm', ['dist-tag', 'add', `${packageName}@${latestStable}`, 'latest'])
+    return
+  }
+
+  run('npm', ['dist-tag', 'rm', packageName, 'latest'], { allowFailure: true })
+}
+
+function packageDistTags(packageName) {
+  const result = spawnSync('npm', ['view', packageName, 'dist-tags', '--json'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env
+  })
+
+  if (result.status !== 0) return {}
+
+  return JSON.parse(result.stdout || '{}')
 }
 
 function artifactsEqual(generatedDir, packageName, version) {
@@ -280,27 +311,6 @@ function rewriteManifest(contentPackage, options) {
 
   contentPackage.manifest = manifest
   writeJson(contentPackage.manifestPath, manifest)
-}
-
-function schemaLineFor(version) {
-  const parsed = semver(version)
-  return `${parsed.major}.${parsed.minor}`
-}
-
-function semver(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
-  if (!match) throw new Error(`Expected semver version, received ${version}`)
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
-  }
-}
-
-function compareSemver(left, right) {
-  const a = semver(left)
-  const b = semver(right)
-  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
 }
 
 function readJson(filePath) {
