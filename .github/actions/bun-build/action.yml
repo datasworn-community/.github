@@ -5,6 +5,9 @@ inputs:
   bun-version-file:
     description: Path to the Bun version file in the caller repository.
     default: .tool-versions
+  generated-output-dir:
+    description: Generated Datasworn JSON directory that must stay in sync when present.
+    default: generated-datasworn
   validate:
     description: Run `bun run validate` after the build.
     default: "false"
@@ -24,6 +27,23 @@ runs:
     - name: Build
       shell: bash
       run: bun run build
+
+    - name: Check generated Datasworn output
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        generated_dir="${{ inputs.generated-output-dir }}"
+        if [[ ! -d "${generated_dir}" ]]; then
+          exit 0
+        fi
+
+        if [[ -n "$(git status --porcelain -- "${generated_dir}")" ]]; then
+          echo "::error::${generated_dir} is out of sync. Run bun run build and commit the generated output."
+          git status --short -- "${generated_dir}"
+          git diff -- "${generated_dir}"
+          exit 1
+        fi
 
     - name: Validate
       if: inputs.validate == 'true'
