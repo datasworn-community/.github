@@ -20,11 +20,15 @@ deliberately.
 ## Publishing
 
 Publishing is configured for npm Trusted Publishing with provenance. Each package
-repository and workflow must be registered as a trusted publisher in npm before
-release or canary publication will work.
+must register its package repository's local calling workflow (for example,
+`release.yml`) as its trusted publisher in npm. Stable and canary jobs must share
+that caller filename because npm allows one trusted publisher per package. The
+separate reusable workflow filenames in this repository are not registered with
+npm.
 
-If Trusted Publishing is not available for a package, add an organization-level
-`NPM_TOKEN` secret and inherit it from the caller workflow.
+Canary cleanup uses `npm dist-tag rm`, which npm OIDC does not authenticate. Keep
+a scoped `NPM_TOKEN` secret inherited by experimental callers for cleanup only;
+stable and canary `npm publish` steps do not receive it.
 
 Release workflows publish non-private packages declared in the root
 `workspaces` field, in internal dependency order. Repositories with one package
@@ -62,7 +66,6 @@ should use the content workflows instead of the workspace release workflow:
 jobs:
   release:
     uses: datasworn-community/.github/.github/workflows/content-release.yml@v1
-    secrets: inherit
 ```
 
 The content release workflow reads generated package directories from
@@ -78,7 +81,8 @@ that PR's exact canary versions before publish. For example, if
 canary build-tools package will depend on that same PR's core canary.
 
 Experimental release callers should include PR open/update events so the shared
-workflow can post instructions before a canary is requested:
+workflow can post instructions before a canary is requested. This job belongs in
+the same local caller file as the stable release job:
 
 ```yaml
 on:
@@ -88,5 +92,6 @@ on:
 jobs:
   experimental-release:
     uses: datasworn-community/.github/.github/workflows/experimental-release.yml@v1
+    # Inherited only for token-backed dist-tag cleanup when the PR closes.
     secrets: inherit
 ```

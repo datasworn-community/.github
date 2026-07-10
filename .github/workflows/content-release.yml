@@ -11,9 +11,6 @@ on:
         description: Calculate release actions without publishing.
         type: boolean
         default: false
-    secrets:
-      NPM_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -49,8 +46,6 @@ jobs:
       - name: Publish changed packages
         id: publish
         uses: datasworn-community/.github/.github/actions/publish-content-packages@v1
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
           mode: release
           package-dir: ${{ inputs.package-dir }}

@@ -68,7 +68,7 @@ jobs:
           marker='<!-- datasworn-community experimental release -->'
           body="$(cat <<EOF
           ${marker}
-          Canaries run on internal branches only because GitHub does not expose publishing secrets to fork pull requests.
+          Canaries run on internal branches only so untrusted fork code cannot reach the npm trusted-publishing job.
           EOF
           )"
 
@@ -110,8 +110,6 @@ jobs:
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
         id: publish
         uses: datasworn-community/.github/.github/actions/publish-workspaces@v1
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
           mode: canary
           pr-number: ${{ github.event.pull_request.number }}
