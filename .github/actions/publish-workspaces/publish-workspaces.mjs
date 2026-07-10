@@ -18,11 +18,11 @@ const dependencyFields = [
   'devDependencies'
 ]
 
-if (!['release', 'canary', 'cleanup'].includes(mode)) {
+if (!['release', 'canary'].includes(mode)) {
   throw new Error(`Unsupported publish-workspaces mode: ${mode}`)
 }
 
-if ((mode === 'canary' || mode === 'cleanup') && !prNumber) {
+if (mode === 'canary' && !prNumber) {
   throw new Error(`${mode} mode requires pr-number`)
 }
 
@@ -96,12 +96,6 @@ if (mode === 'release' || mode === 'canary') {
 
 for (const workspacePackage of orderedPackages) {
   const packageName = workspacePackage.manifest.name
-
-  if (mode === 'cleanup') {
-    console.log(`Removing ${packageName}@${distTag}`)
-    run('npm', ['dist-tag', 'rm', packageName, distTag], { allowFailure: true })
-    continue
-  }
 
   if (mode === 'canary') {
     const canaryVersion = canaryVersions.get(packageName)
@@ -259,14 +253,14 @@ function rewriteCanaryManifest(workspacePackage, versionsByName) {
   writeJson(workspacePackage.manifestPath, manifest)
 }
 
-function run(command, args, options = {}) {
+function run(command, args) {
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env: process.env
   })
 
-  if (!options.allowFailure && result.status !== 0) {
+  if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`)
   }
 }

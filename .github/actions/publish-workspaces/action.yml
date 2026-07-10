@@ -3,7 +3,7 @@ description: Publish non-private workspace packages in dependency order.
 
 inputs:
   mode:
-    description: One of `release`, `canary`, or `cleanup`.
+    description: One of `release` or `canary`.
     required: true
   pr-number:
     description: Pull request number for canary dist-tags.

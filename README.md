@@ -11,11 +11,11 @@ them to a stable tag, for example:
 ```yaml
 jobs:
   build:
-    uses: datasworn-community/.github/.github/workflows/build.yml@v1
+    uses: datasworn-community/.github/.github/workflows/build.yml@v1.3.0
 ```
 
-Use `@v1` rather than `@main` so changes to the shared workflows can be released
-deliberately.
+Use an immutable release tag such as `@v1.3.0` rather than `@main` so changes to
+the shared workflows can be adopted deliberately.
 
 ## Publishing
 
@@ -26,9 +26,10 @@ that caller filename because npm allows one trusted publisher per package. The
 separate reusable workflow filenames in this repository are not registered with
 npm.
 
-Canary cleanup uses `npm dist-tag rm`, which npm OIDC does not authenticate. Keep
-a scoped `NPM_TOKEN` secret inherited by experimental callers for cleanup only;
-stable and canary `npm publish` steps do not receive it.
+Stable and canary publishes use npm OIDC exclusively; callers do not pass an
+npm access token. Each canary is published under a per-PR `pr-<number>` dist-tag.
+These tags remain after the PR closes as convenience aliases and can move when a
+new canary is published. Use the exact canary version for reproducible installs.
 
 Release workflows publish non-private packages declared in the root
 `workspaces` field, in internal dependency order. Repositories with one package
@@ -65,7 +66,7 @@ should use the content workflows instead of the workspace release workflow:
 ```yaml
 jobs:
   release:
-    uses: datasworn-community/.github/.github/workflows/content-release.yml@v1
+    uses: datasworn-community/.github/.github/workflows/content-release.yml@v1.3.0
 ```
 
 The content release workflow reads generated package directories from
@@ -87,11 +88,9 @@ the same local caller file as the stable release job:
 ```yaml
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, labeled, synchronize, closed]
+    types: [opened, reopened, ready_for_review, labeled, synchronize]
 
 jobs:
   experimental-release:
-    uses: datasworn-community/.github/.github/workflows/experimental-release.yml@v1
-    # Inherited only for token-backed dist-tag cleanup when the PR closes.
-    secrets: inherit
+    uses: datasworn-community/.github/.github/workflows/experimental-release.yml@v1.3.0
 ```

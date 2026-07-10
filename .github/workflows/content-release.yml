@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build
-        uses: datasworn-community/.github/.github/actions/bun-build@v1
+        uses: datasworn-community/.github/.github/actions/bun-build@v1.3.0
         with:
           validate: "true"
 
@@ -45,7 +45,7 @@ jobs:
 
       - name: Publish changed packages
         id: publish
-        uses: datasworn-community/.github/.github/actions/publish-content-packages@v1
+        uses: datasworn-community/.github/.github/actions/publish-content-packages@v1.3.0
         with:
           mode: release
           package-dir: ${{ inputs.package-dir }}
