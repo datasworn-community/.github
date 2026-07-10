@@ -7,9 +7,6 @@ on:
         description: Directory where the caller build writes publishable packages.
         type: string
         default: dist/packages
-    secrets:
-      NPM_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -38,7 +35,7 @@ jobs:
           ${marker}
           Need an experimental content publish for this PR? Add the \`release_experimental\` label.
 
-          While the label is present, every push publishes fresh content canaries with the \`pr-${{ github.event.pull_request.number }}\` npm dist-tag. Remove the label to stop publishing canaries.
+          While the label is present, every push publishes fresh content canaries with the \`pr-${{ github.event.pull_request.number }}\` npm dist-tag. Remove the label to stop future publishes. The dist-tag remains after the PR closes; use an exact canary version for reproducible installs.
           EOF
           )"
 
@@ -73,7 +70,7 @@ jobs:
           marker='<!-- datasworn-community content experimental release -->'
           body="$(cat <<EOF
           ${marker}
-          Content canaries run on internal branches only because GitHub does not expose publishing secrets to fork pull requests.
+          Content canaries run on internal branches only so untrusted fork code cannot reach the npm trusted-publishing job.
           EOF
           )"
 
@@ -94,7 +91,7 @@ jobs:
 
       - name: Build
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
-        uses: datasworn-community/.github/.github/actions/bun-build@v1
+        uses: datasworn-community/.github/.github/actions/bun-build@v1.3.0
 
       - name: Setup Node for npm publishing
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
@@ -114,9 +111,7 @@ jobs:
       - name: Publish content canaries
         if: github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
         id: publish
-        uses: datasworn-community/.github/.github/actions/publish-content-packages@v1
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        uses: datasworn-community/.github/.github/actions/publish-content-packages@v1.3.0
         with:
           mode: canary
           package-dir: ${{ inputs.package-dir }}
@@ -140,6 +135,8 @@ jobs:
           \`\`\`sh
           ${INSTALL_LINES}
           \`\`\`
+
+          The \`pr-${{ github.event.pull_request.number }}\` alias remains after this PR closes. Use a versioned install command above for reproducibility.
           EOF
           )"
 
@@ -151,37 +148,3 @@ jobs:
           else
             gh api "repos/${GITHUB_REPOSITORY}/issues/${{ github.event.pull_request.number }}/comments" -f body="${body}"
           fi
-
-  cleanup:
-    name: Remove content canary dist-tags
-    if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build
-        uses: datasworn-community/.github/.github/actions/bun-build@v1
-
-      - name: Setup Node for npm publishing
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org/
-          package-manager-cache: false
-
-      - name: Setup npm
-        run: |
-          npm install --global npm@latest
-          npm config set registry https://registry.npmjs.org/
-          npm --version
-
-      - name: Remove content PR dist-tags
-        uses: datasworn-community/.github/.github/actions/publish-content-packages@v1
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        with:
-          mode: cleanup
-          package-dir: ${{ inputs.package-dir }}
-          pr-number: ${{ github.event.pull_request.number }}

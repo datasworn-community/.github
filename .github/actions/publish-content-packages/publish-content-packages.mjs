@@ -15,11 +15,11 @@ const prNumber = process.env.INPUT_PR_NUMBER
 const headSha = process.env.INPUT_HEAD_SHA
 const dryRun = process.env.INPUT_DRY_RUN === 'true'
 
-if (!['release', 'canary', 'cleanup'].includes(mode)) {
+if (!['release', 'canary'].includes(mode)) {
   throw new Error(`Unsupported publish-content-packages mode: ${mode}`)
 }
 
-if ((mode === 'canary' || mode === 'cleanup') && !prNumber) {
+if (mode === 'canary' && !prNumber) {
   throw new Error(`${mode} mode requires pr-number`)
 }
 
@@ -36,17 +36,6 @@ if (generatedPackages.length === 0) {
 const distTag = prNumber ? `pr-${prNumber}` : undefined
 const summary = []
 const installLines = []
-
-if (mode === 'cleanup') {
-  for (const contentPackage of generatedPackages) {
-    console.log(`Removing ${contentPackage.manifest.name}@${distTag}`)
-    run('npm', ['dist-tag', 'rm', contentPackage.manifest.name, distTag], {
-      allowFailure: true
-    })
-  }
-  writeOutputs(summary, installLines)
-  process.exit(0)
-}
 
 if (mode === 'canary') {
   publishCanaries(generatedPackages)
@@ -126,7 +115,6 @@ function publishCanaries(packages) {
         '--tag',
         distTag
       ])
-      ensureCanaryIsNotLatest(contentPackage.manifest.name, canaryVersion)
     }
   }
 }
@@ -167,35 +155,6 @@ function latestPublishedVersionOnLine(packageName, schemaLine) {
     Array.isArray(versions) ? versions : [versions],
     schemaLine
   )
-}
-
-function ensureCanaryIsNotLatest(packageName, canaryVersion) {
-  const tags = packageDistTags(packageName)
-  if (tags.latest !== canaryVersion) return
-
-  const latestStable = latestPublishedVersionOnLine(
-    packageName,
-    schemaLineFor(canaryVersion)
-  )
-
-  if (latestStable != null) {
-    run('npm', ['dist-tag', 'add', `${packageName}@${latestStable}`, 'latest'])
-    return
-  }
-
-  run('npm', ['dist-tag', 'rm', packageName, 'latest'], { allowFailure: true })
-}
-
-function packageDistTags(packageName) {
-  const result = spawnSync('npm', ['view', packageName, 'dist-tags', '--json'], {
-    cwd: root,
-    encoding: 'utf8',
-    env: process.env
-  })
-
-  if (result.status !== 0) return {}
-
-  return JSON.parse(result.stdout || '{}')
 }
 
 function artifactsEqual(generatedDir, packageName, version) {
@@ -334,14 +293,14 @@ function writeOutputs(summaryLines, installLines) {
   )
 }
 
-function run(command, args, options = {}) {
+function run(command, args) {
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env: process.env
   })
 
-  if (!options.allowFailure && result.status !== 0) {
+  if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}`)
   }
 }
