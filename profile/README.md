@@ -36,6 +36,12 @@ Community-maintained tooling and data packages for the Datasworn ecosystem.
 | --- | --- | --- | --- |
 | Build Tools | `@datasworn-community/build-tools` | [npm](https://www.npmjs.com/package/@datasworn-community/build-tools) | N/A |
 
+### Apps
+
+| Name | Repo | Live |
+| --- | --- | --- |
+| Web viewer | [datasworn-community/viewer](https://github.com/datasworn-community/viewer) | <https://datasworn-community.github.io/viewer/> |
+
 ## Template
 
 Use the [community template](https://github.com/datasworn-community/community-template) to start a new Datasworn Community content package.
