@@ -42,6 +42,12 @@ Community-maintained tooling and data packages for the Datasworn ecosystem.
 | --- | --- | --- |
 | Web viewer | [datasworn-community/viewer](https://github.com/datasworn-community/viewer) | <https://datasworn-community.github.io/viewer/> |
 
+### Language bindings
+
+| Language | Repo | Notes |
+| --- | --- | --- |
+| Python (Pydantic v2) | [datasworn-community/python-bindings](https://github.com/datasworn-community/python-bindings) | 10 workspace packages, `datasworn-community-<ruleset>` on PyPI (coming soon) |
+
 ## Template
 
 Use the [community template](https://github.com/datasworn-community/community-template) to start a new Datasworn Community content package.
