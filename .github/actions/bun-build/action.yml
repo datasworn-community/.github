@@ -11,6 +11,19 @@ inputs:
   validate:
     description: Run `bun run validate` after the build.
     default: "false"
+  audit-level:
+    description: >
+      `bun audit --audit-level=<level>` threshold (low, moderate, high,
+      critical, or `off` to skip the audit step entirely). Defaults to
+      `moderate` so any CVE that isn't dev-time-only fails the PR.
+    default: moderate
+  audit-ignore:
+    description: >
+      Comma-separated list of GHSA IDs to pass as `--ignore=` flags to
+      `bun audit`. Use for transitive advisories that have no upstream
+      fix or that ride along with dev-only tooling. Example:
+      `GHSA-xxjr-mmjv-4gpg,GHSA-r5fr-rjxr-66jc`.
+    default: ""
 
 runs:
   using: composite
@@ -23,6 +36,26 @@ runs:
     - name: Install dependencies
       shell: bash
       run: bun install --frozen-lockfile
+
+    - name: Audit dependencies
+      if: inputs.audit-level != 'off'
+      shell: bash
+      env:
+        AUDIT_LEVEL: ${{ inputs.audit-level }}
+        AUDIT_IGNORE: ${{ inputs.audit-ignore }}
+      run: |
+        set -euo pipefail
+        ignore_flags=()
+        if [[ -n "${AUDIT_IGNORE}" ]]; then
+          IFS=',' read -ra ids <<< "${AUDIT_IGNORE}"
+          for id in "${ids[@]}"; do
+            trimmed="${id// /}"
+            if [[ -n "${trimmed}" ]]; then
+              ignore_flags+=("--ignore=${trimmed}")
+            fi
+          done
+        fi
+        bun audit --audit-level="${AUDIT_LEVEL}" "${ignore_flags[@]}"
 
     - name: Build
       shell: bash
