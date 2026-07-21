@@ -45,21 +45,33 @@ Content
   Starsmith
   …
 Schema  ← new tab
-  Types
+  Rules
     ruleset
     expansion
-    move
+    rules (stats / condition meters / special tracks / tags)
+  Moves
     move_category
+    move
+      action_roll
+      progress_roll
+      special_track
+      no_roll
+  Oracles
     oracle_collection
     oracle_rollable
-      table_text
-      table_text2
-      table_text3
-      column_text
-      …
+      table_text / table_text2 / table_text3
+      column_text / …
+  Assets
+    asset_collection
     asset
+    asset_ability
+  Truths
+    truth
+    truth_option
+  Delve
     delve_site
-    …
+    delve_site_theme
+    delve_site_domain
   Concepts
     ID format
     Enhancement / replacement
@@ -67,21 +79,31 @@ Schema  ← new tab
     Roll ranges
 ```
 
+The top-level grouping mirrors the categories consumers already think in — rules, moves, oracles, assets, truths (and the delve family) — rather than a flat alphabetical dump of schema definitions.
+
 Right pane for a selected type (say `oracle_rollable` → `table_text`):
 
-- **Type** (structured from the schema):
+- **Type** (structured from the schema, including each field's `description`):
 
   ```
   oracle_rollable (oracle_type: "table_text")
     _id           OracleRollableId          (required)
+                  The unique Datasworn ID for this node.
     _source       SourceInfo                (required)
+                  Attribution for the original source of this node.
     name          Label                     (required)
+                  The primary name/label for this node.
     dice          DiceExpression            (required)
+                  The roll used to select a result on this oracle.
     rows          OracleRollableRowText[]   (required)
+                  An array of objects, each representing a single row.
     replaces      OracleRollableId[]        (optional)
+                  Indicates that this table replaces the identified tables.
     enhances      OracleRollableId[]        (optional)
     …
   ```
+
+  The descriptions come straight from the JSON schema's per-field `description` strings — no separate doc source to maintain. Long descriptions collapse to the first sentence with an expander.
 
 - **Live examples** (2 pulled from currently-loaded content):
 
@@ -101,12 +123,12 @@ Right pane for a selected type (say `oracle_rollable` → `table_text`):
 
 ## Where the type info comes from
 
-Two candidates:
+Two candidates were considered:
 
 1. **Runtime type-graph walk on `@datasworn-community/core`'s TypeScript declarations.** Bundle those into the viewer and reflect over them. Rich (JSDoc, refs, unions) but adds parser complexity to the client.
 2. **Parse `datasworn.schema.json` (also shipped by core) at load time.** Simpler; the JSON schema already has the fields, unions, `$ref`s, descriptions. Missing the ergonomics of the TS declarations but sufficient for a Schema tab.
 
-Leaning toward **(2)** — the JSON schema is a well-defined data structure, whereas walking TS types at runtime is inference-heavy. Open to arguments for (1).
+**Resolved (review): (2).** The JSON schema is a well-defined data structure, whereas walking TS types at runtime is inference-heavy — and since field descriptions render straight from the schema's `description` strings, (2) carries everything the panel needs in one artifact.
 
 ## Rough shape of work
 
@@ -117,11 +139,11 @@ Leaning toward **(2)** — the JSON schema is a well-defined data structure, whe
 
 Estimated ~3–4 days of implementation for a functional first cut. Doesn't touch the schema itself, doesn't need core changes.
 
-## Open questions
+## Resolved questions (from review)
 
-1. **How much of the type universe is worth surfacing?** Datasworn's schema has ~200 definitions; not all are interesting to a new contributor. Curated list of "primary" types (matching the left rail sketch above) + everything else discoverable via cross-links seems right.
-2. **Should the Schema tab load schemas at different versions?** Related to the [single-schema-line viewer policy](https://github.com/datasworn-community/viewer/pull/4) — if the viewer pins to one line, the Schema tab pins to the same line. Multi-version schema browsing is out of scope until multi-version content browsing is.
-3. **Should this eventually live in `@datasworn-community/core` docs** (auto-published somewhere) rather than exclusively in the viewer? Probably yes long-term — but a viewer Schema tab is a good MVP because it can piggy-back on the viewer's existing loading pipeline.
+1. **How much of the type universe is worth surfacing?** → Curated. The left rail shows the primary categories consumers think in — rules, moves, oracles, assets, truths, plus the delve family — with everything else in the ~200-definition universe reachable through cross-links rather than listed.
+2. **Should the Schema tab load schemas at different versions?** → Most recent version only, consistent with the [single-schema-line viewer policy](https://github.com/datasworn-community/viewer/pull/4). If a breaking schema change ships and older-line content stays relevant, we revisit — until then, one version keeps both the UI and the loader simple.
+3. **Should this eventually live in `@datasworn-community/core` docs rather than the viewer?** → It stays in the viewer. Beyond piggy-backing on the viewer's loading pipeline, there's a correctness reason: the core schema version won't always match the content packages' schema versions, and a docs site published from core would drift from what the viewer actually loads. Keeping the Schema tab next to the content it exemplifies means both always describe the same line.
 
 ## Alternatives considered
 
