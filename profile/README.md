@@ -51,3 +51,7 @@ Community-maintained tooling and data packages for the Datasworn ecosystem.
 ## Template
 
 Use the [community template](https://github.com/datasworn-community/community-template) to start a new Datasworn Community content package.
+
+## Contributing
+
+See the org-wide [CONTRIBUTING guide](https://github.com/datasworn-community/.github/blob/main/CONTRIBUTING.md) for where to open PRs, release labels, and shared CI conventions.

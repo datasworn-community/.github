@@ -27,11 +27,11 @@ Thanks for wanting to help. This document is the org-wide reference for conventi
 | `release:major-schema` | Breaking schema change: removed or renamed fields, changed constraints, changed defaults. Bumps the `datasworn_version` major. |
 | `release_experimental` | Not a release-intent label — this is a *canary* switch. Applying it publishes canary artifacts under a `pr-<number>` npm dist-tag on every push while the label is present. Remove to stop; the tag remains after the PR closes. |
 
-If you're unsure which label applies, `release:none` is the safest default; a maintainer can bump it later. **Do not add more than one release label** — the check enforces exactly one.
+Deciding the release label is a **maintainer call**. As a contributor, don't apply one yourself — describe what your PR changes (schema? shipped data? tooling only?) in the description and a maintainer will label it before merge. This keeps the release intent in one pair of hands; a pre-applied label is easy for a reviewer to miss. **Never more than one release label** — the check enforces exactly one.
 
 ## Dependabot and lockfiles
 
-The JS repos use Bun with `bun.lock` committed. As of 2025 the Dependabot config in each repo uses `package-ecosystem: bun` so Dependabot updates the lockfile alongside `package.json` in the same PR.
+The JS repos use Bun with `bun.lock` committed. The Dependabot config in each repo uses `package-ecosystem: bun` so Dependabot updates the lockfile alongside `package.json` in the same PR.
 
 If you find a Dependabot PR whose CI fails with `error: lockfile had changes, but lockfile is frozen`, the repo is still on the older `npm` ecosystem — check `.github/dependabot.yml`. Fix is a one-line ecosystem swap; then any future Dependabot PR needs no manual lockfile work.
 
@@ -91,4 +91,4 @@ Content bugs (a roll range off by a few, a typo, a missing table) belong in the 
 
 ## Discord
 
-The Ironsworn Discord's `#datasworn` channel is where most day-to-day coordination happens.
+The Ironsworn Discord's `#datasworn` channel is where most day-to-day coordination happens. The invite link is on [ironswornrpg.com](https://www.ironswornrpg.com/).
