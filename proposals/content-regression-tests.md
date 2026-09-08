@@ -1,34 +1,67 @@
-# Proposal: Content-Regression Tests for Datasworn Content Repos
+# Proposal: One Roll-Range Completeness Rule for Datasworn Content Repos
 
-**Status:** Draft — soliciting feedback before implementation.
+**Status:** Draft, revised 08.09.2026 — scope cut by about 90% after measuring the premises.
 **Author:** @tbsvttr
 **Scope:** `official-content`, `community-content`, `datasworn-elegy`, and any future org content repos.
 
+> **What changed and why.** The first draft proposed a shared reusable workflow plus a new
+> `datasworn-build check` sub-command, to close five regression classes it described as
+> unprotected. Four of those five are already caught by `validateOracleRollable`, which runs on
+> every build and which the draft did not know about — verified by mutating real content and
+> running the build. One genuine gap remains, and it needs neither the workflow nor the
+> sub-command. The motivating incident turns out to be a class this proposal explicitly does not
+> address; that is corrected below rather than dropped.
+
 ## Problem
 
-Today's build gate catches structural breakage — schema validation runs on every PR, and a source YAML that produces malformed JSON fails immediately. That's a strong lower bound.
+**Corrected 08.09.2026.** The table below originally listed five unprotected regression classes. Four of them are already caught, and the incident that motivated this proposal is caught by none of the rules it proposes. Everything here was measured by mutating real content in `community-content` and running the same `bun run build` that `content-build.yml` runs, then reverting.
 
-It's also the only lower bound. Everything above "does the JSON parse?" is unprotected:
+| Regression class | originally claimed | measured |
+|---|---|---|
+| A move references `oracle_rollable:starforged/does_not_exist` | ❌ silent | **build fails** — `starsmith: 2 unresolved ID reference(s)`, resolving into an npm-installed dependency |
+| A `1d100` table has a gap between two rows | ❌ silent | **build fails** — `@ index N: Roll range (…) is not sequential with previous numbered row` |
+| Two rows have overlapping roll ranges | ❌ silent | **build fails** — same adjacency check |
+| A dice expression is `1d100+` | ❌ silent | **build fails** — `diceRange()` uses its own *anchored* pattern, so `1d100+`, `1d6+1d8`, `xx1d6xx` and `d100` all throw |
+| Refactor drops a `replaces:` pointer | ❌ silent | still unverified; `replaces` targets are IDs, so the ID-ref check probably covers it |
 
-| Regression class | Would we catch it today? |
-|---|---|
-| Refactor renames a table and drops the `replaces:` pointer | ❌ Silent — nothing asserts on IDs |
-| A `1d100` table has ranges 1–50 then 51–95 with a 5-row gap | ❌ Silent — schema doesn't check roll-range integrity |
-| A move references `oracle_rollable:classic/does_not_exist` | ❌ Silent — cross-ID reference isn't checked at build time |
-| A dice expression is `1d100+` (typo) | ❌ Silent — depends on the schema's regex, and even then only at read time |
-| Two rows in the same table have overlapping roll ranges | ❌ Silent |
+The mechanism doing the work is `validateOracleRollable` in [`packages/build-tools/src/semantic-validators.ts:38`](https://github.com/datasworn-community/datasworn/blob/main/packages/build-tools/src/semantic-validators.ts), reached from `validateSemantics` in `in-memory-rules-package-builder.ts:134`. It runs on every build. The original draft was written without knowing it existed.
 
-These share a trait: they're **invariants a human reviewer can't reliably eyeball**. A 100-row table diff where two ranges overlap looks exactly like a correct one; an ID reference into another package can't be checked without the other package's built tree in front of you. (Bulk content *removal*, by contrast, is loud in review — the generated JSON is committed, so deleting 30 oracle rows shows up as a large red diff. That class stays a reviewer's call; see Non-goals.)
+### The one class that really is unprotected
 
-We hit exactly one of these in real life this month: the Starforged Derelict Settlement zones off-by-5. The bug survived the build gate because the JSON was well-formed — just wrong. A user in the Iron Vault Discord found it, and even after the fix we haven't added anything that would catch the next one.
+A table whose rows are individually valid and perfectly adjacent, but which **does not cover the whole dice range**. Measured: changing a `1d100` table's last row from `96-100` to `96-99` leaves 100 unreachable, and the build stays **green**.
+
+Nothing checks that the first numbered row starts at the dice minimum or that the last one ends at the maximum. Adjacency is checked *between* rows; the two ends are not checked at all.
+
+### About the motivating incident
+
+The original draft said:
+
+> We hit exactly one of these in real life this month: the Starforged Derelict Settlement zones off-by-5.
+
+That is wrong, and it is worth correcting rather than quietly dropping, because it was the argument for doing any of this. Reconstructed from `official-content` commit `124b01a`:
+
+```
+before:  1-20  21-30  31-50  51-60  61-70  71-90  91-100
+after:   1-20  21-30  31-55  56-65  66-75  76-90  91-100
+```
+
+Both versions start at 1, end at 100, and are perfectly adjacent. **No range-integrity rule — existing or proposed — would have caught it.** The boundaries were simply in the wrong places relative to the printed book, which is semantic fidelity, and this proposal lists that under Non-goals.
+
+So the honest position is: the completeness rule below is a real gap worth closing, and it would not have prevented the bug that prompted the proposal. Those are two separate statements and the draft conflated them.
 
 ## Proposal
 
-Add a **shared reusable content-regression test** at [`datasworn-community/.github/.github/workflows/content-regression.yml`](https://github.com/datasworn-community/.github) that content repos plug into their CI. The test runs after the existing build and asserts:
+One rule, added to the validator that already exists.
 
-1. **Roll-range integrity.** Every `oracle_rollable` with a `rows` array has non-overlapping, no-gap roll ranges that sum to exactly the declared dice's range (1d100 → 1..100; 1d20 → 1..20; multi-dice → the correct combined range). Same shape as the ad-hoc Python checker I ran while reviewing PR #12 on `tbsvttr/datasworn`.
+**Roll-range completeness.** For every `oracle_rollable` with numbered rows, assert that the first row's `roll.min` equals the dice expression's minimum and the last row's `roll.max` equals its maximum. `diceRange()` (`semantic-validators.ts:23`) already computes both bounds; `validateOracleRollable` already walks the rows in order and already compares each row against those bounds. The two end-checks are a handful of lines in a function that is doing everything else already.
 
-2. **Cross-package ID reference resolution.** Every `oracle_rollable`, `move`, `asset`, etc. reference embedded in text (`datasworn:oracle_rollable:classic/…`), macros (`{{table>oracle_rollable:classic/…}}`), or dedicated fields (`replaces`, `enhances`, `suggestions`, `oracles`, `moves.roll_options`, `assets`, etc.) resolves to an ID that exists somewhere in the built tree — either this package or one of its declared dependencies. Reuses `extractIdRefs` and `validateIdRefs` from `@datasworn-community/build-tools` (already tested in [`datasworn/tests/build-tools.test.ts`](https://github.com/datasworn-community/datasworn/blob/main/tests/build-tools.test.ts)).
+No new sub-command: `datasworn-build` is a 57-line flag parser with no sub-command layer, and adding one buys nothing here because the check belongs where the other semantic checks are.
+
+No new reusable workflow: `content-build.yml` already runs the build, and the build already runs `validateSemantics`. A stricter validator ships to the content repos the way every other build change does — by releasing build-tools and bumping the pin. The `@v1.3.0` pinning in each repo's caller gives a per-repo rollout for free.
+
+### Expected fallout
+
+Turning this on will fail content that is currently green. The count needs measuring against all three content repos before release — `datasworn-elegy` was not checked at all in this round. Some hits will be legitimate patterns the rule has to learn (tables that deliberately do not cover their full range, if any exist). That triage is the real cost, not the rule.
 
 ## Non-goals
 
@@ -37,58 +70,50 @@ Add a **shared reusable content-regression test** at [`datasworn-community/.gith
 - **Not** enforcing a particular style (roll-range representation, source metadata format, etc.).
 - **Not** a guard against content removal. An earlier draft proposed checked-in baseline counts (fail CI when the number of moves/oracles changes); review feedback rightly compared that to snapshot UI testing — people learn to run `--update` without looking, and legitimately removing content shouldn't need a CI escape hatch. Content additions/removals are visible in the committed `generated-datasworn/` diff and stay a code-review concern.
 
-## Interface sketch
+## Where the check lives
 
-Content repos plug in via a thin caller in `.github/workflows/regression.yml`:
+In `validateOracleRollable`, next to the bounds and adjacency checks it already performs:
 
-```yaml
-name: Content regression
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  check:
-    uses: datasworn-community/.github/.github/workflows/content-regression.yml@v1
+```ts
+// packages/build-tools/src/semantic-validators.ts
+const possible = diceRange(oracle.dice)          // already there
+// ... per-row bounds and adjacency ...          // already there
+// new: the two ends
+if (numberedRows.length > 0) {
+  if (first.roll.min !== possible.min) throw …
+  if (last.roll.max  !== possible.max) throw …
+}
 ```
 
-The reusable workflow:
-
-1. Runs the shared `bun-build` action to install and build.
-2. Runs `datasworn-build check` (a new sub-command in `@datasworn-community/build-tools` — see resolved question below) that:
-   - Loads every built `dist/packages/*/json/<pkg>.json`
-   - Runs the two assertions above
-   - Prints a diff-shaped report if any fail
-3. Fails the job if anything mismatches. Otherwise no-op.
-
-Both checks are pure invariants — no checked-in state, no update flag, nothing to regenerate. A failing check means the content is wrong (or the check has a false positive to fix), never "you forgot to acknowledge a change."
+Content repos need no change at all. The build already calls `validateSemantics`, and each repo pins the shared workflow at `@v1.3.0`, so a stricter build-tools release rolls out one repo at a time by bumping that pin.
 
 ## Rollout plan
 
-1. **Land the `check` sub-command in build-tools** (`datasworn` repo) with unit tests; the ID-ref extraction/validation half already exists there.
-2. **Land the shared workflow here.** This PR (after the sub-command ships).
-3. **Adopt on `official-content` first as the canary.** Cheapest to test — smallest content surface, all packages already published. Verify green on a no-op PR.
-4. **Roll out to `community-content` and `datasworn-elegy`** the same way.
-5. Iterate on false positives — expect a couple of rounds where the roll-range integrity check flags legitimate patterns we hadn't accounted for (multi-dice tables, non-contiguous ranges by design, etc.).
+1. Add the completeness check to `validateOracleRollable`, with unit tests.
+2. Measure the fallout across `official-content`, `community-content` and `datasworn-elegy` before releasing. Fix or exempt what it flags.
+3. Release build-tools; bump the pin per content repo, canary first.
 
 ## Cost estimate
 
-- `check` sub-command in build-tools + tests: ~1 day (roll-range logic is new; ID-ref validation already exists).
-- Shared workflow + docs: ~half a day.
-- Per-repo adoption: ~15 min each (add the workflow caller, verify).
-- Ongoing false-positive triage: probably 2-3 minor fixes in the first month.
+- The rule plus tests: **hours**, not a day. The arithmetic and the row walk both exist.
+- Fallout triage: unknown until step 2 is done, and the only part that can grow.
+- Shared workflow, per-repo adoption, sub-command: **removed** — see above.
 
 ## Resolved questions
 
-1. **Bun script vs. TypeScript-as-CLI** → build-tools sub-command (`datasworn-build check`). Review feedback was indifferent between the two; the deciding factor is that `extractIdRefs`/`validateIdRefs` already live in build-tools, so the sub-command reuses them directly instead of importing across package boundaries, and content repos get it for free through the dependency they already have.
+1. **Bun script vs. TypeScript-as-CLI vs. build-tools sub-command** → moot. The check goes into the existing semantic validator, which is neither. The original framing assumed nothing was validating content beyond the schema; that assumption was wrong.
 
-2. **Baseline counts, granularity, and explicit ID lists** → dropped entirely with the baseline mechanism (see Non-goals). Content addition/removal is reviewable in the committed `generated-datasworn/` diff; CI only asserts invariants that can't be eyeballed.
+2. **Baseline counts, granularity, explicit ID lists** → dropped, unchanged from the original draft. Content addition/removal is reviewable in the committed `generated-datasworn/` diff.
+
+3. **Should the unanchored `DiceExpression` pattern in the schema be fixed?** → Not as part of this. `schema-source/schema/common/Rolls.ts:7` really is unanchored and AJV really does accept `1d100+` and `xx1d6xx` against it — but `diceRange()` re-parses with its own anchored pattern and throws, so no bad expression reaches a build artifact. Worth a separate one-line PR for hygiene; it closes no reachable gap.
 
 ## Alternatives considered
 
 - **Per-repo bespoke tests.** Each content repo writes its own vitest/bun suite. Rejected: 3× the maintenance, 3× the drift.
 - **Checked-in baseline counts.** Fail CI when the move/oracle/asset count changes, with a `--update` flag to acknowledge. Rejected on review feedback: same failure mode as snapshot UI testing (people run `--update` reflexively), and content removal is a legitimate, review-visible operation that shouldn't need a CI escape hatch.
-- **Rely on Iron Vault users to catch bugs.** That's the status quo, and it's how we found the Derelict Settlement bug. Not sustainable as more content lands.
+- **Rely on Iron Vault users to catch bugs.** That's the status quo, and it's how the Derelict Settlement bug was found. Worth being precise now that the bug turns out to be a semantic-fidelity error: for *that class* this remains the only mechanism, and this proposal does not change it. What the completeness rule buys is one structural class, not the incident that prompted the draft.
+
+- **A shared reusable `content-regression.yml` plus a `datasworn-build check` sub-command.** This was the original proposal. Rejected against its own evidence: the checks it would have hosted already run inside the build, and the one genuinely missing rule belongs in the validator that performs the neighbouring checks rather than in a second place that has to be kept in agreement with it.
 
 ## Discussion
 
