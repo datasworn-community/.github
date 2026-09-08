@@ -161,12 +161,42 @@ Two candidates were considered:
 ~~Estimated ~3–4 days of implementation for a functional first cut.~~ **Needs revisiting.** That figure assumed a route could be added to an existing router and that a parser was available to reuse. Neither exists, so the first cut also has to carry:
 
 - a **mode concept**. The sidebar is one hard-coded `innerHTML` block and `Tree.ts` is bound to `RulesPackage`; there is no tab or second-tree abstraction to slot into.
-- a **URL scheme**. Today the entire model is `window.location.hash` == a Datasworn entity id, read at startup and on `popstate`. `/schema/<TypeName>?discriminator=…` is a different shape and needs deciding, not just adding.
+- ~~a **URL scheme**~~ — **decided, see below.** It turns out to be an addition rather than a new shape, which removes this item.
 - a **definition → content predicate table** for `ExampleFinder`. The mapping is not injective: `OracleTableText` and `EmbeddedOracleTableText` both present as `type: oracle_rollable, oracle_type: table_text`, and the same holds for all six oracle variants and for the move variants.
 
 What genuinely is cheap, and cheaper than the draft implies: the loader. `datasworn.schema.json` ships in `@datasworn-community/core`, is a flat `definitions` map, and needs reading rather than parsing.
 
 Still true: doesn't touch the schema itself, doesn't need core changes.
+
+## Resolved: the URL scheme
+
+**`#schema:<TypeName>` and `#schema:<TypeName>/<discriminator>`.** Not `/schema/<TypeName>`, which the original sketch proposed.
+
+Two measurements decided it.
+
+**Path routing is not free here.** The viewer deploys to GitHub Pages with `base: '/viewer/'` (`vite.config.ts:10`, `.github/workflows/deploy.yml`) and there is **no `404.html`**. Path-based routes on Pages need the 404-redirect trick, which is awkward next to a non-root base path and makes every deep link do a redirect on first load. That is real cost for no gain.
+
+**The hash is already a `<type>:<path>` grammar.** `navigateToId` (`src/state.ts:125`) splits on the first colon, treats the left side as a type and the right side as a slash-separated path — because Datasworn IDs are literally that shape (`oracle_rollable:starforged/core/action`). So `schema:OracleRollable` is not a second URL scheme living alongside the first; it is one more type in the scheme that exists.
+
+What that buys, all of it for free:
+
+- no router, no route table, no history abstraction
+- no `404.html`, no base-path special case
+- startup (`main.ts:31`) and `popstate` (`main.ts:37`) keep working unchanged — both already do `hash.slice(1)` → `navigateToId`
+- deep links, back and forward all behave the same as they do for content today
+
+### The one change it does need
+
+`navigateToId` assumes every id is a content path:
+
+```ts
+if (pathSegments.length < 2) return false   // state.ts:134
+const rulesetId = pathSegments[0]           // state.ts:136
+```
+
+`schema:OracleRollable` has one segment and is rejected; `schema:OracleRollable/table_text` has two and would be read as ruleset `OracleRollable`. So the `schema` type has to branch **before** the ruleset assumption, not after it.
+
+That is a guard at the top of one function, and it is worth doing carefully rather than incidentally — `findById` (`state.ts:199`) carries a second, already-divergent copy of the same category mapping, and this is the moment not to add a third.
 
 ## Resolved questions (from review)
 
